@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,6 +76,29 @@ Final Resume Score: ${result.score}/100`;
           </CardHeader>
           <CardContent>
             <p className="text-gray-700 leading-relaxed">{result.jobFit}</p>
+          </CardContent>
+        </Card>
+
+        {/* Matched Skills */}
+        <Card className="border-l-4 border-l-green-400">
+          <CardHeader>
+            <CardTitle className="flex items-center text-green-600">
+              <BarChart className="w-6 h-6 mr-3" />
+              Matched Skills
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {result.foundSkills && result.foundSkills.length > 0 ? (
+                result.foundSkills.map((skill, index) => (
+                  <Badge key={index} variant="outline" className="bg-green-50 text-green-800 border-green-300">
+                    {skill}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-gray-500">No matched skills found.</span>
+              )}
+            </div>
           </CardContent>
         </Card>
 

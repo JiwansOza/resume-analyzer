@@ -9,36 +9,55 @@ interface RoleCriteria {
 interface GeminiAnalysisRequest {
   resumeText: string;
   jobRole: string;
+  jobDescription?: string;
 }
 
 // Skill variants mapping for better matching
 const skillVariants: Record<string, string[]> = {
-  'JavaScript': ['JavaScript', 'JS'],
-  'TypeScript': ['TypeScript', 'TS'],
-  'HTML': ['HTML'],
-  'CSS': ['CSS'],
-  'React': ['React'],
-  'Vue': ['Vue'],
-  'Angular': ['Angular'],
-  'Node.js': ['Node.js', 'Node'],
-  'Python': ['Python'],
-  'SQL': ['SQL'],
-  'API': ['API', 'APIs', 'REST API', 'RESTful API'],
-  'Database': ['Database', 'Databases'],
-  'MongoDB': ['MongoDB'],
-  'PostgreSQL': ['PostgreSQL'],
-  'Docker': ['Docker'],
-  'AWS': ['AWS', 'Amazon Web Services'],
-  'Figma': ['Figma'],
-  'Adobe XD': ['Adobe XD'],
-  'Sketch': ['Sketch'],
-  'Prototyping': ['Prototyping', 'Prototype'],
-  'User Research': ['User Research'],
-  'Wireframing': ['Wireframing', 'Wireframe'],
-  'Design Systems': ['Design Systems', 'Design System'],
-  'Usability Testing': ['Usability Testing'],
+  'JavaScript': ['JavaScript', 'JS', 'Javascript', 'js'],
+  'TypeScript': ['TypeScript', 'TS', 'Typescript', 'ts'],
+  'HTML': ['HTML', 'html', 'Html5', 'HTML5'],
+  'CSS': ['CSS', 'css', 'CSS3', 'css3'],
+  'React': ['React', 'React.js', 'ReactJS', 'reactjs', 'react js', 'react', 'React JS', 'ReactJs'],
+  'Vue': ['Vue', 'Vue.js', 'VueJS', 'vuejs', 'vue js', 'vue'],
+  'Angular': ['Angular', 'AngularJS', 'angularjs', 'angular'],
+  'Node.js': ['Node.js', 'Node', 'Nodejs', 'nodejs', 'node js', 'node'],
+  'Python': ['Python', 'python'],
+  'SQL': ['SQL', 'sql', 'MySQL', 'mysql', 'PostgreSQL', 'postgresql', 'Postgres', 'postgres'],
+  'API': ['API', 'APIs', 'REST API', 'RESTful API', 'api', 'apis', 'rest api', 'restful api'],
+  'Database': ['Database', 'Databases', 'database', 'databases'],
+  'MongoDB': ['MongoDB', 'mongodb', 'Mongo Db', 'mongo db'],
+  'PostgreSQL': ['PostgreSQL', 'postgresql', 'Postgres', 'postgres'],
+  'Docker': ['Docker', 'docker'],
+  'AWS': ['AWS', 'Amazon Web Services', 'aws', 'amazon web services'],
+  'Figma': ['Figma', 'figma'],
+  'Adobe XD': ['Adobe XD', 'adobe xd', 'AdobeXD', 'adobexd'],
+  'Sketch': ['Sketch', 'sketch'],
+  'Prototyping': ['Prototyping', 'Prototype', 'prototyping', 'prototype'],
+  'User Research': ['User Research', 'user research'],
+  'Wireframing': ['Wireframing', 'Wireframe', 'wireframing', 'wireframe'],
+  'Design Systems': ['Design Systems', 'Design System', 'design systems', 'design system'],
+  'Usability Testing': ['Usability Testing', 'usability testing'],
+  'Responsive Design': ['Responsive Design', 'responsive design', 'Responsive', 'responsive'],
+  'Git': ['Git', 'git'],
+  'Webpack': ['Webpack', 'webpack'],
+  'CI/CD': ['CI/CD', 'ci/cd', 'Continuous Integration', 'Continuous Deployment', 'continuous integration', 'continuous deployment'],
+  'Jenkins': ['Jenkins', 'jenkins'],
+  'Terraform': ['Terraform', 'terraform'],
+  'Linux': ['Linux', 'linux'],
+  'Monitoring': ['Monitoring', 'monitoring'],
+  'Automation': ['Automation', 'automation'],
   // Add more as needed
 };
+
+// Helper to normalize skill variants the same way as resume text
+function normalizeSkillVariant(variant: string): string {
+  return variant
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 // Normalize resume text: lowercase, remove extra spaces, punctuation
 function normalizeText(text: string): string {
@@ -49,19 +68,31 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-export const analyzeResumeWithGemini = async ({ resumeText, jobRole }: GeminiAnalysisRequest): Promise<AnalysisResult> => {
-  try {
-    console.log('Starting AI analysis for role:', jobRole);
-    console.log('Resume text length:', resumeText.length);
-    
-    // Use Hugging Face's free inference API
-    const analysis = await analyzeWithHuggingFace(resumeText, jobRole);
-    return analysis;
-  } catch (error) {
-    console.error('AI analysis error:', error);
-    // Fallback to enhanced local analysis if API fails
-    return await enhancedLocalAnalysis(resumeText, jobRole);
+function extractSkillsFromJD(jdText: string): string[] {
+  const normalizedJD = normalizeText(jdText);
+  const allSkills = Object.keys(skillVariants);
+  const found: string[] = [];
+  for (const skill of allSkills) {
+    const variants = skillVariants[skill] || [skill];
+    if (variants.some(variant => normalizedJD.includes(normalizeSkillVariant(variant)))) {
+      found.push(skill);
+    }
   }
+  return found;
+}
+
+export const analyzeResumeWithGemini = async ({ resumeText, jobRole, jobDescription }: GeminiAnalysisRequest): Promise<AnalysisResult> => {
+  let requiredSkills: string[];
+  if (jobDescription && jobDescription.trim().length > 0) {
+    requiredSkills = extractSkillsFromJD(jobDescription);
+    if (requiredSkills.length === 0) {
+      // fallback to role-based if nothing found
+      requiredSkills = getRoleSpecificCriteria(jobRole).requiredSkills;
+    }
+  } else {
+    requiredSkills = getRoleSpecificCriteria(jobRole).requiredSkills;
+  }
+  return await enhancedLocalAnalysis(resumeText, requiredSkills, jobRole);
 };
 
 const analyzeWithHuggingFace = async (resumeText: string, jobRole: string): Promise<AnalysisResult> => {
@@ -113,35 +144,41 @@ Please analyze and provide:
 const parseAIResponse = async (
   apiResponse: HuggingFaceResponse,
   jobRole: string,
-  resumeText: string
+  resumeText: string,
+  jobDescription?: string
 ): Promise<AnalysisResult> => {
-  // Parse the AI response and structure it
   const responseText = apiResponse[0]?.generated_text || '';
-  
-  // Enhanced analysis based on the AI response and role-specific criteria
-  return enhancedLocalAnalysis(resumeText, jobRole, responseText);
+  let requiredSkills: string[];
+  if (jobDescription && jobDescription.trim().length > 0) {
+    requiredSkills = extractSkillsFromJD(jobDescription);
+    if (requiredSkills.length === 0) {
+      requiredSkills = getRoleSpecificCriteria(jobRole).requiredSkills;
+    }
+  } else {
+    requiredSkills = getRoleSpecificCriteria(jobRole).requiredSkills;
+  }
+  return enhancedLocalAnalysis(resumeText, requiredSkills, jobRole, responseText);
 };
 
-const enhancedLocalAnalysis = async (resumeText: string, jobRole: string, aiInsight?: string): Promise<AnalysisResult> => {
+const enhancedLocalAnalysis = async (resumeText: string, requiredSkills: string[], jobRole: string, aiInsight?: string): Promise<AnalysisResult> => {
   console.log('Performing enhanced local analysis for:', jobRole);
   
-  const roleSpecificData = getRoleSpecificCriteria(jobRole);
   const normalizedResume = normalizeText(resumeText);
   
-  // Improved skill matching using regex and variants
-  const foundSkills = roleSpecificData.requiredSkills.filter(skill => {
+  // Improved skill matching using regex and variants (with normalized variants)
+  const foundSkills = requiredSkills.filter(skill => {
     const variants = skillVariants[skill] || [skill];
     return variants.some(variant => {
-      const regex = new RegExp(`\\b${variant.toLowerCase()}\\b`, 'i');
-      return regex.test(normalizedResume);
+      const normalizedVariant = normalizeSkillVariant(variant);
+      return normalizedResume.includes(normalizedVariant);
     });
   });
   
-  const missingKeywords = roleSpecificData.requiredSkills.filter(skill => {
+  const missingKeywords = requiredSkills.filter(skill => {
     const variants = skillVariants[skill] || [skill];
     return !variants.some(variant => {
-      const regex = new RegExp(`\\b${variant.toLowerCase()}\\b`, 'i');
-      return regex.test(normalizedResume);
+      const normalizedVariant = normalizeSkillVariant(variant);
+      return normalizedResume.includes(normalizedVariant);
     });
   }).slice(0, 7);
   
@@ -149,8 +186,8 @@ const enhancedLocalAnalysis = async (resumeText: string, jobRole: string, aiInsi
   const grammarIssues = analyzeGrammar(resumeText);
   
   // Calculate score based on multiple factors
-  const skillMatchPercentage = (foundSkills.length / roleSpecificData.requiredSkills.length) * 100;
-  const score = calculateScore(skillMatchPercentage, resumeText, roleSpecificData);
+  const skillMatchPercentage = (foundSkills.length / requiredSkills.length) * 100;
+  const score = calculateScore(skillMatchPercentage, resumeText, getRoleSpecificCriteria(jobRole));
   
   // Generate role-specific suggestions
   const suggestions = generateSuggestions(jobRole, foundSkills, missingKeywords, resumeText);
@@ -160,7 +197,8 @@ const enhancedLocalAnalysis = async (resumeText: string, jobRole: string, aiInsi
     missingKeywords,
     grammarIssues,
     suggestions,
-    score: Math.round(score)
+    score: Math.round(score),
+    foundSkills
   };
 };
 

@@ -1,3 +1,7 @@
+import pdfParse from 'pdf-parse';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 export const extractTextFromFile = async (file: File): Promise<string> => {
   const fileType = file.type;
@@ -18,12 +22,18 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        // For basic PDF text extraction, we'll use a simple approach
-        // In a real implementation, you'd use pdf-parse or PDF.js
-        const text = await extractBasicPDFText(reader.result as ArrayBuffer);
+        const typedArray = new Uint8Array(reader.result as ArrayBuffer);
+        const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map((item: any) => item.str).join(' ') + '\n';
+        }
         resolve(text);
       } catch (error) {
-        reject(new Error('Failed to extract text from PDF'));
+        console.error('PDF.js extraction error:', error);
+        reject(new Error('Failed to extract text from PDF using pdfjs-dist: ' + (error && error.message ? error.message : error)));
       }
     };
     reader.onerror = () => reject(new Error('Failed to read PDF file'));
@@ -58,20 +68,6 @@ const extractTextFromTXT = async (file: File): Promise<string> => {
     reader.onerror = () => reject(new Error('Failed to read text file'));
     reader.readAsText(file);
   });
-};
-
-const extractBasicPDFText = async (buffer: ArrayBuffer): Promise<string> => {
-  // Basic PDF text extraction - converts buffer to string and extracts readable text
-  const uint8Array = new Uint8Array(buffer);
-  const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
-  let text = decoder.decode(uint8Array);
-  
-  // Basic cleanup to extract readable text from PDF structure
-  text = text.replace(/[^\x20-\x7E\n]/g, ' '); // Remove non-printable characters
-  text = text.replace(/\s+/g, ' '); // Normalize whitespace
-  text = text.trim();
-  
-  return text || `Resume content from ${file.name}. Please ensure your PDF contains selectable text.`;
 };
 
 const extractBasicDOCXText = (buffer: ArrayBuffer): string => {

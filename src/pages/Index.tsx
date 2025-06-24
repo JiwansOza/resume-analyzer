@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { FileUpload } from '../components/FileUpload';
-import { JobRoleSelector } from '../components/JobRoleSelector';
 import { FeedbackDisplay } from '../components/FeedbackDisplay';
 import { AnalyzeButton } from '../components/AnalyzeButton';
-import { Brain, FileText, Target } from 'lucide-react';
+import { Brain, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractTextFromFile } from '../utils/fileProcessor';
 import { analyzeResumeWithGemini } from '../services/geminiService';
+import Footer from '../components/Footer';
 
 export interface AnalysisResult {
   jobFit: string;
@@ -14,11 +14,12 @@ export interface AnalysisResult {
   grammarIssues: string;
   suggestions: string;
   score: number;
+  foundSkills: string[];
 }
 
 const Index = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [selectedRole, setSelectedRole] = useState<string>('');
+  const [jobDescription, setJobDescription] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
@@ -33,39 +34,32 @@ const Index = () => {
     setAnalysisResult(null);
   };
 
-  const handleRoleSelect = (role: string) => {
-    setSelectedRole(role);
+  const handleJDChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setJobDescription(e.target.value);
     setAnalysisResult(null);
   };
 
   const handleAnalyze = async () => {
-    if (!uploadedFile || !selectedRole) {
-      toast.error('Please upload a resume and select a job role');
+    if (!uploadedFile || !jobDescription) {
+      toast.error('Please upload a resume and provide a job description');
       return;
     }
-
     setIsAnalyzing(true);
-    
     try {
-      console.log('Starting analysis for file:', uploadedFile.name, 'Role:', selectedRole);
-      
-      // Extract text from the uploaded file
+      console.log('Starting analysis for file:', uploadedFile.name);
       toast.info('Extracting text from your resume...');
       const resumeText = await extractTextFromFile(uploadedFile);
       console.log('Extracted text length:', resumeText.length);
-      
       if (resumeText.length < 50) {
         toast.error('Could not extract enough text from the file. Please ensure your file contains readable text.');
         return;
       }
-      
-      // Analyze with AI
       toast.info('AI is analyzing your resume...');
       const result = await analyzeResumeWithGemini({
         resumeText,
-        jobRole: selectedRole
+        jobRole: '',
+        jobDescription
       });
-      
       console.log('Analysis completed:', result);
       setAnalysisResult(result);
       toast.success('Resume analysis completed!');
@@ -109,16 +103,18 @@ const Index = () => {
                 />
               </div>
 
-              {/* Job Role Selection */}
+              {/* Job Description Section */}
               <div>
-                <div className="flex items-center mb-4">
-                  <Target className="w-6 h-6 text-blue-600 mr-2" />
-                  <h2 className="text-2xl font-semibold text-gray-800">Target Role</h2>
+                <div className="mt-6">
+                  <label htmlFor="jd-input" className="block text-lg font-semibold text-gray-800 mb-2">Paste Job Description</label>
+                  <textarea
+                    id="jd-input"
+                    className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Paste the job description here..."
+                    value={jobDescription}
+                    onChange={handleJDChange}
+                  />
                 </div>
-                <JobRoleSelector
-                  selectedRole={selectedRole}
-                  onRoleSelect={handleRoleSelect}
-                />
               </div>
             </div>
 
@@ -127,7 +123,7 @@ const Index = () => {
               <AnalyzeButton
                 onClick={handleAnalyze}
                 isAnalyzing={isAnalyzing}
-                disabled={!uploadedFile || !selectedRole}
+                disabled={!uploadedFile || !jobDescription}
               />
             </div>
           </div>
@@ -138,6 +134,7 @@ const Index = () => {
           )}
         </div>
       </div>
+      <Footer />
     </div>
   );
 };
